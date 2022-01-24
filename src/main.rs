@@ -75,18 +75,27 @@ async fn handle_whip(
     let message = json!(&whip);
     // New message from this user, send it to everyone else (except same uid)...
     for (&uid, tx) in users.read().await.iter() {
-        if let Err(_disconnected) = tx.send(Message::text(message.to_string())) {
-            // The tx is disconnected, our `user_disconnected` code
-            // should be happening in another task, nothing more to
-            // do here.
+        if let Err(disconnected) = tx.send(Message::text(message.to_string())) {
+            println!("{}", disconnected);
         }
     }
 
+    println!("Waiting for SDP from WS");
+
     if let Ok(res) = sdp_rx.recv().await {
-        if let Ok(s) = res.to_str() {
-            return Ok(s.to_owned());
+        println!("Got Client SDP");
+        match res.to_str() {
+            Ok(s) => {
+                println!("returning sdp");
+                return Ok(s.to_owned());
+            },
+            Err(e) => {
+                println!("failed getting ws string");
+            }
         }
     }
+
+    println!("Returning test");
 
     Ok("test".to_string())
 }
@@ -125,14 +134,11 @@ async fn websocket_connect(
             }
         };
 
-        sdp_tx.send(msg.clone());
-
-        let s = if let Ok(s) = msg.to_str() {
-            s
-        } else {
-            return;
-        };
-
-        println!("{}", s);
+        println!("Got Client SDP in WS");
+        let res = sdp_tx.send(msg.clone());
+        match res {
+            Ok(m) => println!("sent"),
+            Err(e) => println!("{}", e),
+        }
     }
 }
